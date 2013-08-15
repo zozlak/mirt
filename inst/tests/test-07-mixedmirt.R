@@ -42,7 +42,9 @@ test_that('mixed dich', {
                  tollerance = 1e-2)
     
     covdata$group <- factor(rep(paste0('G',1:50), each = N/50))
-    rmod1 <- suppressMessages(mixedmirt(data, covdata, 1, fixed = ~ 0 + items, random = ~ 1|group, 
+    rmod1 <- suppressMessages(mixedmirt(data, covdata, 
+                                        mirt.model(paste0('G = 1-', ncol(data)), quiet = TRUE), 
+                                        fixed = ~ 0 + items, random = ~ 1|group, 
                                         draws = 10, verbose = FALSE))
     expect_is(rmod1, 'MixedClass')
     expect_equal(rmod1@df, 303) 

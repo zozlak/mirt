@@ -1,12 +1,14 @@
-MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRACE, DERIV)
-{     
-    if(is.null(random)) random <- list()
+MHRM.group <- function(pars, constrain, PrepList, list, random = list(), 
+                       random.thetas = list(), fixed.thetas = list(), PROBTRACE, DERIV)
+{
     RAND <- length(random) > 0L
+    RAND.THETAS <- length(random.thetas) > 0L
     verbose <- list$verbose
     nfact <- list$nfact
+    factorNames <- list$factorNames
     NCYCLES <- list$NCYCLES
     BURNIN <- list$BURNIN
-    if(RAND) BURNIN <- BURNIN + 50L
+    if(RAND || RAND.THETAS) BURNIN <- BURNIN + 50L
     SEMCYCLES <- list$SEMCYCLES
     KDRAWS <- list$KDRAWS
     TOL <- list$TOL
@@ -17,6 +19,11 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
     prodlist <- PrepList[[1L]]$prodlist
     nfullpars <- 0L
     estpars <- c()
+    fixed.thetas.together <- matrix(0L, 1L, 1L)
+    if(length(fixed.thetas) > 0L){
+        fixed.thetas.together <- do.call(cbind, fixed.thetas)
+        attr(fixed.thetas.together, 'each') <- do.call(c, lapply(fixed.thetas, ncol))
+    }
     gfulldata <- gtheta0 <- gstructgrouppars <- gitemtrace <- vector('list', ngroups)
     for(g in 1L:ngroups){
         gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])
@@ -33,6 +40,12 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
             estpars <- c(estpars, random[[i]]@est)
         }
     }
+    if(RAND.THETAS){
+        for(i in 1L:length(random.thetas)){
+            nfullpars <- nfullpars + length(random.thetas[[i]]@par)
+            estpars <- c(estpars, random.thetas[[i]]@est)
+        }
+    }
     index <- 1L:nfullpars
     N <- nrow(gtheta0[[1L]])
     #Burn in
@@ -45,6 +58,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
                                         itemloc=itemloc, cand.t.var=cand.t.var,
                                         prior.t.var=gstructgrouppars[[g]]$gcov, OffTerm=OffTerm,
                                         prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist,
+                                        random.thetas=list(), fixed.thetas=list(), factorNames=factorNames,
                                         PROBTRACE=PROBTRACE[[g]])
             if(i > 5L){
                 if(attr(gtheta0[[g]],"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp
@@ -81,6 +95,13 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
                 ind1 <- ind2 + 1L
             }
         }
+        if(RAND.THETAS){
+            for(i in 1L:length(random)){
+                ind2 <- ind1 + length(random.thetas[[i]]@par) - 1L
+                longpars[ind1:ind2] <- random.thetas[[i]]@par
+                ind1 <- ind2 + 1L
+            }
+        }
     }
     stagecycle <- 1L
     converge <- 1L
@@ -92,6 +113,9 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
     if(RAND)
         for(i in 1L:length(random))
             L <- c(L, random[[i]]@est)
+    if(RAND.THETAS)
+        for(i in 1L:length(random.thetas))
+            L <- c(L, random.thetas[[i]]@est)
     estindex <- index[estpars]
     L <- diag(as.numeric(L))
     redun_constr <- rep(FALSE, length(estpars))
@@ -128,6 +152,12 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
             UBOUND <- c(UBOUND, random[[i]]@ubound)            
         }
     }
+    if(RAND.THETAS){
+        for(i in 1L:length(random.thetas)){
+            LBOUND <- c(LBOUND, random.thetas[[i]]@lbound)
+            UBOUND <- c(UBOUND, random.thetas[[i]]@ubound)            
+        }
+    }
 
     ####Big MHRM loop
     for(cycles in 1L:(NCYCLES + BURNIN + SEMCYCLES))
@@ -153,44 +183,75 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
         pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
         for(g in 1L:ngroups)
             gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])
-        if(RAND && cycles > 100) random <- reloadRandom(random=random, longpars=longpars, 
+        if(RAND && cycles > 100L) random <- reloadRandom(random=random, longpars=longpars, 
                                         parstart=max(pars[[1L]][[J+1L]]@parnum) + 1L)
-        
-        if(RAND && cycles == 100){
+        if(RAND.THETAS && cycles > 100L) 
+            random.thetas <- reloadRandom(random=random.thetas, longpars=longpars, 
+                             parstart=max(pars[[1L]][[J+1L+length(random)]]@parnum) + 1L)
+        if((RAND || RAND.THETAS) && cycles == 100L){
             for(g in 1L:ngroups) gtheta0[[g]] <- matrix(0, nrow(gfulldata[[g]]), nfact)
-            OffTerm <- OffTerm(random, J=J, N=N)
-            for(j in 1L:length(random)){
-                tmp <- .1
-                for(i in 1L:30L){                
-                    random[[j]]@drawvals <- DrawValues(random[[j]], Theta=gtheta0[[1L]], itemloc=itemloc,
-                                                       pars=pars[[1L]], fulldata=gfulldata[[1L]], 
-                                                       offterm0=OffTerm)
-                    OffTerm <- OffTerm(random, J=J, N=N)
-                    if(i > 5L){
-                        if(attr(random[[j]]@drawvals,"Proportion Accepted") > .4)
-                            random[[j]]@cand.t.var <- random[[j]]@cand.t.var + 2*tmp
-                        if(attr(random[[j]]@drawvals,"Proportion Accepted") < .2)
-                            random[[j]]@cand.t.var <- random[[j]]@cand.t.var - 2*tmp
-                        if(attr(random[[j]]@drawvals,"Proportion Accepted") < .05)
-                            random[[j]]@cand.t.var <- random[[j]]@cand.t.var - 5*tmp
-                        if (random[[j]]@cand.t.var < 0){
-                            random[[j]]@cand.t.var <- tmp
-                            tmp <- tmp / 10
+            if(RAND){
+                OffTerm <- OffTerm(random, J=J, N=N)
+                for(j in 1L:length(random)){
+                    tmp <- .1
+                    for(i in 1L:30L){                
+                        random[[j]]@drawvals <- DrawValues(random[[j]], Theta=gtheta0[[1L]], itemloc=itemloc,
+                                                           pars=pars[[1L]], fulldata=gfulldata[[1L]], 
+                                                           offterm0=OffTerm)
+                        OffTerm <- OffTerm(random, J=J, N=N)
+                        if(i > 5L){
+                            if(attr(random[[j]]@drawvals,"Proportion Accepted") > .4)
+                                random[[j]]@cand.t.var <- random[[j]]@cand.t.var + 2*tmp
+                            if(attr(random[[j]]@drawvals,"Proportion Accepted") < .2)
+                                random[[j]]@cand.t.var <- random[[j]]@cand.t.var - 2*tmp
+                            if(attr(random[[j]]@drawvals,"Proportion Accepted") < .05)
+                                random[[j]]@cand.t.var <- random[[j]]@cand.t.var - 5*tmp
+                            if (random[[j]]@cand.t.var < 0){
+                                random[[j]]@cand.t.var <- tmp
+                                tmp <- tmp / 10
+                            }
                         }
                     }
+                    #better start values
+                    tmp <- nrow(random[[j]]@drawvals)
+                    tmp <- cov(random[[j]]@drawvals) * (tmp / (tmp-1L))
+                    random[[j]]@par[random[[j]]@est] <- tmp[lower.tri(tmp, TRUE)][random[[j]]@est]
                 }
-                #better start values
-                tmp <- nrow(random[[j]]@drawvals)
-                tmp <- cov(random[[j]]@drawvals) * (tmp / (tmp-1L))
-                random[[j]]@par[random[[j]]@est] <- tmp[lower.tri(tmp, TRUE)][random[[j]]@est]
+            }
+            if(RAND.THETAS){
+                for(j in 1L:length(random.thetas)){
+                    tmp <- .1
+                    for(i in 1L:30L){                
+                        random.thetas[[j]]@drawvals <- DrawValues(random.thetas[[j]], Theta=gtheta0[[1L]], itemloc=itemloc,
+                                                           pars=pars[[1L]], fulldata=gfulldata[[1L]], 
+                                                           offterm0=OffTerm)                        
+                        if(i > 5L){
+                            if(attr(random.thetas[[j]]@drawvals,"Proportion Accepted") > .4)
+                                random.thetas[[j]]@cand.t.var <- random.thetas[[j]]@cand.t.var + 2*tmp
+                            if(attr(random.thetas[[j]]@drawvals,"Proportion Accepted") < .2)
+                                random.thetas[[j]]@cand.t.var <- random.thetas[[j]]@cand.t.var - 2*tmp
+                            if(attr(random.thetas[[j]]@drawvals,"Proportion Accepted") < .05)
+                                random.thetas[[j]]@cand.t.var <- random.thetas[[j]]@cand.t.var - 5*tmp
+                            if (random.thetas[[j]]@cand.t.var < 0){
+                                random.thetas[[j]]@cand.t.var <- tmp
+                                tmp <- tmp / 10
+                            }
+                        }
+                    }
+                    #better start values
+                    tmp <- nrow(random.thetas[[j]]@drawvals)
+                    tmp <- cov(random.thetas[[j]]@drawvals) * (tmp / (tmp-1L))
+                    random.thetas[[j]]@par[random.thetas[[j]]@est] <- tmp[lower.tri(tmp, TRUE)][random.thetas[[j]]@est]
+                }
             }
             cand.t.var <- .5
             tmp <- .1
             for(i in 1L:30L){
                 gtheta0[[1L]] <- draw.thetas(theta0=gtheta0[[1L]], pars=pars[[1L]], fulldata=gfulldata[[1L]],
-                                             itemloc=itemloc, cand.t.var=cand.t.var,
+                                             itemloc=itemloc, cand.t.var=cand.t.var, factorNames=factorNames,
                                              prior.t.var=gstructgrouppars[[1L]]$gcov, OffTerm=OffTerm,
                                              prior.mu=gstructgrouppars[[1L]]$gmeans, prodlist=prodlist,
+                                             random.thetas=random.thetas, fixed.thetas=fixed.thetas,
                                              PROBTRACE=PROBTRACE[[1L]])
                 if(i > 5L){
                     if(attr(gtheta0[[g]],"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp
@@ -212,29 +273,44 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
             pars[[1L]][[length(pars[[1L]])]]@par[pars[[1L]][[length(pars[[1L]])]]@est] <- 
                 tmp2[pars[[1L]][[length(pars[[1L]])]]@est]            
         }
-
         #Step 1. Generate m_k datasets of theta
         LL <- 0
         for(g in 1L:ngroups){
             for(i in 1L:5L)
                 gtheta0[[g]] <- draw.thetas(theta0=gtheta0[[g]], pars=pars[[g]], fulldata=gfulldata[[g]],
-                                      itemloc=itemloc, cand.t.var=cand.t.var,
-                                      prior.t.var=gstructgrouppars[[g]]$gcov, OffTerm=OffTerm,
-                                      prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist,
+                                            itemloc=itemloc, cand.t.var=cand.t.var, factorNames=factorNames,
+                                            prior.t.var=gstructgrouppars[[g]]$gcov, OffTerm=OffTerm,
+                                            prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist,
+                                            random.thetas=random.thetas, fixed.thetas=fixed.thetas,
                                             PROBTRACE=PROBTRACE[[g]])            
             LL <- LL + attr(gtheta0[[g]], "log.lik")
         }
-        if(RAND && cycles > 100){
-            for(j in 1:length(random)){
+        if(length(fixed.thetas) > 0L || length(random.thetas) > 0L){
+            gtheta0old <- gtheta0            
+            tmp <- pars[[1L]][[1L]]@par        
+            betas <- list()
+            for(i in factorNames)
+                betas[[i]] <- tmp[grepl(paste0(i, '_'), names(tmp))]                
+            gtheta0[[1L]] <- update2Thetas(fixed.thetas, random.thetas, gtheta0[[1L]], betas)            
+        }
+        if(RAND && cycles > 100L){
+            for(j in 1L:length(random)){
                 for(i in 1L:5L){                
                     random[[j]]@drawvals <- DrawValues(random[[j]], Theta=gtheta0[[1L]], itemloc=itemloc,
                                                        pars=pars[[1L]], fulldata=gfulldata[[1L]], 
                                                        offterm0=OffTerm)
                     OffTerm <- OffTerm(random, J=J, N=N)
-                }                                
+                }
             }
         }
-
+        if(RAND.THETAS && cycles > 100){
+            for(j in 1L:length(random.thetas)){
+                for(i in 1L:5L)
+                    random[[j]]@drawvals <- DrawValues(random.thetas[[j]], Theta=gtheta0[[1L]], itemloc=itemloc,
+                                                       pars=pars[[1L]], fulldata=gfulldata[[1L]], 
+                                                       offterm0=OffTerm)                                  
+            }
+        }
         #Step 2. Find average of simulated data gradients and hessian
         g.m <- h.m <- group.m <- list()
         longpars <- g <- rep(0, nfullpars)
@@ -250,7 +326,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
                                          itemloc=itemloc)
             for (i in 1L:J){
                 deriv <- DERIV[[group]][[i]](x=pars[[group]][[i]], Theta=thetatemp, 
-                               estHess=TRUE, offterm=OffTerm[,i])
+                               estHess=TRUE, offterm=OffTerm[,i], fixed.thetas=fixed.thetas.together)
                 ind2 <- ind1 + length(deriv$grad) - 1L
                 longpars[ind1:ind2] <- pars[[group]][[i]]@par
                 g[ind1:ind2] <-  deriv$grad
@@ -275,6 +351,18 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
                 ind1 <- ind2 + 1L
             }
         }
+        if(RAND.THETAS){
+            for(i in 1L:length(random.thetas)){
+                deriv <- RandomDeriv(x=random.thetas[[i]])
+                ind2 <- ind1 + length(deriv$grad) - 1L
+                longpars[ind1:ind2] <- random.thetas[[i]]@par
+                g[ind1:ind2] <- deriv$grad
+                h[ind1:ind2, ind1:ind2] <- deriv$hess
+                ind1 <- ind2 + 1L
+            }
+        }
+        if(length(fixed.thetas) > 0L || length(random.thetas) > 0L)
+            gtheta0 <- gtheta0old
         grad <- g %*% L
         ave.h <- (-1)*L %*% h %*% L
         grad <- grad[1L, estpars & !redun_constr]
@@ -305,8 +393,8 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
                     stop('\nEstimation halted during burn in stages, solution is unstable')
             }
             correction <- solve(ave.h, grad)
-            correction[correction > .5] <- 1
-            correction[correction < -.5] <- -1
+            correction[correction > 1] <- 1
+            correction[correction < -1] <- -1
             #prevent guessing/upper pars from moving more than .01 at all times
             names(correction) <- names(estpars[estpars & !redun_constr])
             tmp <- correction[names(correction) == 'g']
@@ -329,7 +417,6 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
             }
             next
         }
-
         #Step 3. Update R-M step
         Tau <- Tau + gamma*(ave.h - Tau)
         if(qr(Tau)$rank != ncol(Tau)){
@@ -415,6 +502,13 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
         for(i in 1L:length(random)){
             ind2 <- ind1 + length(random[[i]]@par) - 1L
             random[[i]]@SEpar <- SE[ind1:ind2]
+            ind1 <- ind2 + 1L
+        }
+    }
+    if(RAND.THETAS){
+        for(i in 1L:length(random.thetas)){
+            ind2 <- ind1 + length(random.thetas[[i]]@par) - 1L
+            random.thetas[[i]]@SEpar <- SE[ind1:ind2]
             ind1 <- ind2 + 1L
         }
     }

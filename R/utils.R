@@ -27,7 +27,8 @@ prodterms <- function(theta0, prodlist)
 
 # MH sampler for theta values
 draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var,
-                        prior.mu, prodlist, OffTerm, PROBTRACE)
+                        prior.mu, prodlist, OffTerm, random.thetas, fixed.thetas, 
+                        factorNames, PROBTRACE)
 {
     N <- nrow(fulldata)
     J <- length(pars) - 1L
@@ -39,6 +40,17 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
     if(length(prodlist) > 0L){
         theta0 <- prodterms(theta0,prodlist)
         theta1 <- prodterms(theta1,prodlist)
+    }
+    colnames(theta0) <- colnames(theta1) <- factorNames
+    if(length(fixed.thetas) > 0L || length(random.thetas) > 0L){
+        theta0old <- theta0
+        theta1old <- theta1
+        tmp <- pars[[1L]]@par        
+        betas <- list()
+        for(i in factorNames)
+            betas[[i]] <- tmp[grepl(paste0(i, '_'), names(tmp))]                
+        theta0 <- update2Thetas(fixed.thetas, random.thetas, theta0, betas)
+        theta1 <- update2Thetas(fixed.thetas, random.thetas, theta1, betas)
     }
     itemtrace0 <- itemtrace1 <- matrix(0, ncol=ncol(fulldata), nrow=nrow(theta0))
     for (i in 1L:J){
@@ -53,6 +65,10 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
     diff <- total_1 - total_0
     accept <- diff > 0
     accept[unif < exp(diff)] <- TRUE
+    if(length(fixed.thetas) > 0L || length(random.thetas) > 0L){
+        theta0 <- theta0old
+        theta1 <- theta1old
+    }
     theta1[!accept, ] <- theta0[!accept, ]
     total_1[!accept] <- total_0[!accept]
     log.lik <- sum(total_1)
@@ -854,10 +870,14 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
 
 make.randomdesign <- function(random, longdata, covnames, itemdesign, N){    
     itemcovnames <- colnames(itemdesign)
-    J <- nrow(itemdesign)    
-    ret <- vector('list', length(random))
+    listnames <- names(random)
+    J <- nrow(itemdesign)
+    ret.intercept <- ret.thetas <- list()
+    ret.thetas.names <- c()
     for(i in 1L:length(random)){
-        f <- gsub(" ", "", as.character(random[[i]])[2L])
+        if(length(random[[i]]) == 2L) f <- gsub(" ", "", as.character(random[[i]])[2L])
+        else f <- gsub(" ", "", as.character(random[[i]])[3L])
+        is.intercept <- ifelse(length(random[[i]]) == 2L, TRUE, FALSE)
         splt <- strsplit(f, '\\|')[[1L]]
         gframe <- model.frame(as.formula(paste0('~',splt[2L])), longdata)        
         sframe <- model.frame(as.formula(paste0('~',splt[1L])), longdata)
@@ -891,7 +911,7 @@ make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
         tmp <- matrix(-Inf, ndim, ndim)
         diag(tmp) <- 1e-4
         lbound <- tmp[lower.tri(tmp, diag=TRUE)]
-        ret[[i]] <- new('RandomPars', 
+        obj <- new('RandomPars', 
                         par=par,
                         est=est,
                         ndim=ndim,
@@ -901,13 +921,22 @@ make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
                         gdesign=gdesign,                        
                         between=between,
                         cand.t.var=.5,
+                        intercept=is.intercept,
                         n.prior.mu=rep(NaN,length(par)),
                         n.prior.sd=rep(NaN,length(par)),
                         b.prior.alpha=rep(NaN,length(par)),
                         b.prior.beta=rep(NaN,length(par)),
                         drawvals=drawvals,
                         mtch=mtch)        
+        if(is.intercept){
+            ret.intercept[[length(ret.intercept) + 1L]] <- obj
+        } else{
+            ret.thetas[[length(ret.thetas) + 1L]] <- obj
+            ret.thetas.names <- c(ret.thetas.names, listnames[i])
+        }
     }    
+    names(ret.thetas) <- ret.thetas.names
+    ret <- list(intercept = ret.intercept, thetas = ret.thetas)
     ret
 }
 
@@ -935,4 +964,15 @@ reloadRandom <- function(random, longpars, parstart){
         ind1 <- ind2 + 1L
     }
     random
+}
+
+update2Thetas <- function(fixed.thetas, random.thetas, error, betas){
+    ret <- error
+    Names.fixed <- names(fixed.thetas)
+    Names.random <- names(random.thetas)
+    for(i in Names.random)
+        ret[,i] <- ret[,i] + random.thetas[[i]]
+    for(i in Names.fixed)
+        ret[,i] <- ret[,i] + fixed.thetas[[i]] %*% betas[[i]]
+    ret
 }

@@ -178,17 +178,18 @@ tail(withoutint$X)
 covdata$group <- factor(rep(paste0('G',1:50), each = N/50))
 
 #random groups
-rmod1 <- mixedmirt(data, covdata, 1, fixed = ~ 0 + items, random = ~ 1|group)
+model <- mirt.model(paste0('G = 1-', ncol(data)), quiet = TRUE)
+rmod1 <- mixedmirt(data, covdata, model, fixed = ~ 0 + items, random = ~ 1|group)
 summary(rmod1)
 coef(rmod1)
 
 #random groups and random items
-rmod2 <- mixedmirt(data, covdata, 1, random = list(~ 1|group, ~ 1|items))
+rmod2 <- mixedmirt(data, covdata, model, random = list(~ 1|group, ~ 1|items))
 summary(rmod2)
 eff <- randef(rmod2) #estimate random effects
 
 #random slopes with fixed intercepts (suppressed correlation)
-rmod3 <- mixedmirt(data, covdata, 1, fixed = ~ 0 + items, random = ~ -1 + pseudoIQ|group)
+rmod3 <- mixedmirt(data, covdata, model, fixed = ~ 0 + items, random = ~ -1 + pseudoIQ|group)
 summary(rmod3)
 (eff <- randef(rmod3))
 
@@ -236,19 +237,20 @@ coef(LLTMwithError)
 
 #make an arbitrary group difference
 covdat <- data.frame(group = rep(c('m', 'f'), nrow(Science)/2))
+model <- mirt.model(paste0('G = 1-', ncol(Science)), quiet = TRUE)
 
 #partial credit model
-mod <- mixedmirt(Science, covdat, model=1, fixed = ~ 0 + group)
+mod <- mixedmirt(Science, covdat, model=model, fixed = ~ 0 + group)
 coef(mod)
 
 #gpcm to estimate slopes
-mod2 <- mixedmirt(Science, covdat, model=1, fixed = ~ 0 + group,
+mod2 <- mixedmirt(Science, covdat, model=model, fixed = ~ 0 + group,
                  itemtype = 'gpcm')
 summary(mod2)
 anova(mod, mod2)
 
 #graded model
-mod3 <- mixedmirt(Science, covdat, model=1, fixed = ~ 0 + group,
+mod3 <- mixedmirt(Science, covdat, model=model, fixed = ~ 0 + group,
                  itemtype = 'graded')
 coef(mod3)
 
