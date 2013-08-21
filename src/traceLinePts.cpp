@@ -56,7 +56,7 @@ RcppExport SEXP traceLinePts(SEXP Rpar, SEXP RTheta, SEXP RasMatrix, SEXP Rot)
 }
 
 // graded
-RcppExport SEXP gradedTraceLinePts(SEXP Rpar, SEXP RTheta, SEXP Ritemexp, SEXP Rot) 
+RcppExport SEXP gradedTraceLinePts(SEXP Rpar, SEXP RTheta, SEXP Rncat, SEXP Ritemexp, SEXP Rot) 
 {
     BEGIN_RCPP
 
@@ -64,11 +64,12 @@ RcppExport SEXP gradedTraceLinePts(SEXP Rpar, SEXP RTheta, SEXP Ritemexp, SEXP R
     NumericVector par(Rpar);	
     NumericVector ot(Rot);
 	NumericMatrix Theta(RTheta);
+    IntegerVector Pncat(Rncat);
 	IntegerVector itemexp(Ritemexp);
     NumericVector a(Theta.ncol());
     for(i = 0; i < Theta.ncol(); i++)
         a(i) = par(i);
-    const int ncat = par.length() - Theta.ncol();
+    const int ncat = Pncat(0) - 1;
     NumericVector d(ncat);        
     for(i = Theta.ncol(); i < par.length(); i++)
         d(i - Theta.ncol()) = par(i);

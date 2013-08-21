@@ -240,7 +240,7 @@ setMethod(
     signature = signature(x = 'dich'),
     definition = function(x){
         par <- x@par
-        d <- par[1L:x@nfact]
+        d <- par[1L+x@nfact]
         d
     }
 )
@@ -250,7 +250,7 @@ setMethod(
     signature = signature(x = 'graded'),
     definition = function(x){
         par <- x@par
-        d <- par[-(1L:x@nfact)]
+        d <- par[(1L+x@nfact):(x@nfact+x@ncat-1L)]
         d
     }
 )
@@ -260,7 +260,7 @@ setMethod(
     signature = signature(x = 'rating'),
     definition = function(x){
         par <- x@par
-        d <- par[-c(1L:x@nfact, length(par))]
+        d <- par[(1L+x@nfact):(x@nfact+x@ncat-1L)]
         d
     }
 )
@@ -270,7 +270,7 @@ setMethod(
     signature = signature(x = 'gpcm'),
     definition = function(x){
         par <- x@par
-        d <- par[-(1L:x@nfact)]
+        d <- par[(1L+x@nfact):(x@nfact+x@ncat)]
         d
     }
 )
@@ -280,7 +280,7 @@ setMethod(
     signature = signature(x = 'rsm'),
     definition = function(x){
         par <- x@par
-        d <- par[-(1L:x@nfact)]
+        d <- par[(1L+x@nfact):(x@nfact+x@ncat)]
         d
     }
 )
@@ -289,7 +289,7 @@ setMethod(
     f = "ExtractZetas",
     signature = signature(x = 'nominal'),
     definition = function(x){
-        d <- x@par[(length(x@par) - x@ncat + 1L):length(x@par)]
+        d <- x@par[(x@nfact+x@ncat+1L):(x@nfact+x@ncat*2)]
         d
     }
 )
@@ -320,7 +320,9 @@ setMethod(
     definition = function(x, Theta, useDesign = TRUE, ot=0){     
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        P <- P.mirt(x@par, Theta=Theta, asMatrix=TRUE, ot=ot)        
+        par <- x@par
+        if(x@nfixed.thetas) par <- par[-c(1L:x@nfixed.thetas)]
+        P <- P.mirt(par, Theta=Theta, asMatrix=TRUE, ot=ot)        
         return(P)
     }
 )
@@ -341,10 +343,10 @@ setMethod(
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'graded', Theta = 'matrix'),
-    definition = function(x, Theta, itemexp = TRUE, useDesign = TRUE, ot=0){        
+    definition = function(x, Theta, itemexp = TRUE, useDesign = TRUE, ot=0){
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        return(P.poly(x@par, Theta=Theta, itemexp=itemexp, ot=ot))
+        return(P.poly(x@par, Theta=Theta, ncat=x@ncat, itemexp=itemexp, ot=ot))
     }
 )
 
@@ -355,11 +357,11 @@ setMethod(
     definition = function(x, Theta, itemexp = TRUE, useDesign = TRUE, ot=0){
         nfact <- x@nfact
         a <- x@par[1L:nfact]
-        d <- x@par[(nfact+1L):(length(x@par)-1L)]
-        t <- x@par[length(x@par)]
+        d <- x@par[(nfact+1L):(nfact+x@ncat-1L)]
+        t <- x@par[nfact+x@ncat]
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        return(P.poly(c(a=a, d=(d + t)), Theta=Theta, itemexp=itemexp, ot=ot))
+        return(P.poly(c(a=a, d=(d + t)), Theta=Theta, ncat=x@ncat, itemexp=itemexp, ot=ot))
     }
 )
 
@@ -368,7 +370,7 @@ setMethod(
     signature = signature(x = 'gpcm', Theta = 'matrix'),
     definition = function(x, Theta, useDesign = TRUE, ot=0){
         a <- x@par[1L:x@nfact]
-        d <- x@par[-(1L:x@nfact)]
+        d <- x@par[(x@nfact+1L):(x@nfact+x@ncat)]
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
         return(P.nominal(a=a, ak=0:(length(d)-1), d=d, Theta=Theta, ot=ot))
@@ -380,8 +382,8 @@ setMethod(
     signature = signature(x = 'rsm', Theta = 'matrix'),
     definition = function(x, Theta, useDesign = TRUE, ot=0){
         a <- x@par[1L:x@nfact]
-        d <- x@par[(x@nfact+1L):(length(x@par)-1L)]
-        t <- x@par[length(x@par)]
+        d <- x@par[(x@nfact+1L):(x@nfact+x@ncat)]
+        t <- x@par[x@nfact+x@ncat+1L]
         d[-1L] <- d[-1L] + t
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
@@ -395,7 +397,7 @@ setMethod(
     definition = function(x, Theta, useDesign = TRUE, ot=0){
         a <- x@par[1L:x@nfact]
         ak <- x@par[(x@nfact+1L):(x@nfact + x@ncat)]
-        d <- x@par[(length(x@par) - x@ncat + 1L):length(x@par)]
+        d <- x@par[(x@nfact+x@ncat+1L):(x@nfact+x@ncat*2)]
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
         return(P.nominal(a=a, ak=ak, d=d, Theta=Theta, ot=ot))
@@ -408,9 +410,9 @@ setMethod(
     definition = function(x, Theta, useDesign = TRUE, ot=0){
         nfact <- x@nfact
         a <- x@par[1L:nfact]
-        d <- x@par[(nfact+1L):(length(x@par)-2L)]
-        g <- x@par[length(x@par)-1L]
-        u <- x@par[length(x@par)]
+        d <- x@par[(nfact+1L):(nfact*2)]
+        g <- x@par[nfact*2+1L]
+        u <- x@par[nfact*2+2L]
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
         return(P.comp(a=a, d=d, Theta=Theta, g=g, u=u, asMatrix=TRUE))
@@ -418,9 +420,9 @@ setMethod(
 )
 
 ##Function passes
-P.poly <- function(par, Theta, itemexp = FALSE, ot = 0)
+P.poly <- function(par, Theta, ncat, itemexp = FALSE, ot = 0)
 {
-    return(.Call('gradedTraceLinePts', par, Theta, itemexp, ot))
+    return(.Call('gradedTraceLinePts', par, Theta, ncat, itemexp, ot))
 }
 
 # Trace lines for mirt models

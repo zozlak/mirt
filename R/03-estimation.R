@@ -186,7 +186,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     for(g in 1L:Data$ngroups)
         for(i in 1L:(nitems+1L))
             nestpars <- nestpars + sum(pars[[g]][[i]]@est)
-    if(!is.null(mixed.design$random)){
+    if(length(mixed.design$random) > 0L){
         for(i in 1L:length(mixed.design$random))
             nestpars <- nestpars + sum(mixed.design$random[[i]]@est)        
     }
@@ -323,6 +323,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                list = list(NCYCLES=opts$NCYCLES, BURNIN=1, SEMCYCLES=5,
                                            KDRAWS=opts$KDRAWS, TOL=opts$SEtol, USEEM=opts$USEEM,
                                            gain=opts$gain,
+                                           factorNames=PrepList[[1L]]$factorNames,
                                            nfactNames=PrepList[[1L]]$nfactNames,
                                            itemloc=PrepList[[1L]]$itemloc, BFACTOR=opts$BFACTOR,
                                            nfact=nfact, constrain=constrain, verbose=FALSE,
@@ -336,6 +337,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                list = list(NCYCLES=opts$NCYCLES, BURNIN=opts$BURNIN,
                                            SEMCYCLES=opts$SEMCYCLES, gain=opts$gain,
                                            KDRAWS=opts$KDRAWS, TOL=opts$TOL, USEEM=FALSE,
+                                           factorNames=PrepList[[1L]]$factorNames,
                                            nfactNames=PrepList[[1L]]$nfactNames,
                                            itemloc=PrepList[[1L]]$itemloc, BFACTOR=opts$BFACTOR,
                                            nfact=nfact, constrain=constrain, verbose=opts$verbose,
@@ -346,10 +348,13 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             rlist[[g]]$expected = numeric(1L)
     } else if(opts$method == 'MIXED'){
         ESTIMATE <- MHRM.group(pars=pars, constrain=constrain,
-                                    PrepList=PrepList, random=mixed.design$random,
+                                    PrepList=PrepList, random=mixed.design$random, 
+                                    random.thetas=mixed.design$random.thetas,
+                                    fixed.thetas=mixed.design$fixed.thetas,
                                list = list(NCYCLES=opts$NCYCLES, BURNIN=opts$BURNIN,
                                            SEMCYCLES=opts$SEMCYCLES, gain=opts$gain,
                                            KDRAWS=opts$KDRAWS, TOL=opts$TOL, USEEM=FALSE,
+                                           factorNames=PrepList[[1L]]$factorNames,
                                            nfactNames=PrepList[[1L]]$nfactNames,
                                            itemloc=PrepList[[1L]]$itemloc, BFACTOR=opts$BFACTOR,
                                            nfact=nfact, constrain=constrain, verbose=opts$verbose,

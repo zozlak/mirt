@@ -135,10 +135,12 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
     }
 
     #augment startvalues and fixedpars for mixed effects
-    nfixedeffects <- 0
+    nfixedeffects <- 0L
     fixed.design.list <- vector('list', J)
     for(i in 1L:J) fixed.design.list[[i]] <- matrix(0)
-    if(!is.null(mixed.design)){         
+    fixed.thetas <- numeric(0L)
+    nfixed.thetas <- 0L
+    if(!is.null(mixed.design)){        
         fixed.design <- mixed.design$fixed
         betas <- rep(0, ncol(fixed.design))
         estbetas <- rep(TRUE, length(betas))
@@ -159,6 +161,22 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
         N <- nrow(mixed.design$fixed) / J
         for(i in 1L:J)
             fixed.design.list[[i]] <- mixed.design$fixed[1L:N + N*(i-1L), , drop = FALSE]
+        if(length(mixed.design$fixed.thetas) > 0L){
+            nfixed.thetas <- sum(do.call(c, lapply(mixed.design$fixed.thetas, ncol)))
+            fixed.thetas.names <- c()
+            tmpnames <- names(mixed.design$fixed.thetas)
+            for(i in 1L:length(mixed.design$fixed.thetas)){
+                fixed.thetas <- c(fixed.thetas, rep(0, ncol(mixed.design$fixed.thetas[[i]])))
+                fixed.thetas.names <- c(fixed.thetas.names, paste(tmpnames[i], 
+                                                                  colnames(mixed.design$fixed.thetas[[i]]), sep='_'))
+            }
+            tmp <- rep(TRUE, length(fixed.thetas))
+            names(tmp) <- names(fixed.thetas) <- fixed.thetas.names
+            for(i in 1L:J){
+                freepars[[i]] <- c(tmp, freepars[[i]])
+                startvalues[[i]] <- c(fixed.thetas, startvalues[[i]])
+            }
+        }
     }
 
     #load items
@@ -167,12 +185,13 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
     for(i in 1L:J){
         tmp <- c(itemloc[i]:(itemloc[i+1L] - 1L)) #item location
 
-        if(any(itemtype[i] == c('Rasch', '1PL')) && K[i] == 2L){
+        if(any(itemtype[i] == c('Rasch', '1PL')) && K[i] == 2L){            
             pars[[i]] <- new('dich', par=startvalues[[i]], est=freepars[[i]],
                              nfact=nfact,
                              dat=fulldata[ ,tmp],
                              ncat=2L,
                              nfixedeffects=nfixedeffects,
+                             nfixed.thetas=nfixed.thetas,
                              any.prior=FALSE,
                              prior.type=rep('none', length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
@@ -192,6 +211,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
+                             nfixed.thetas=nfixed.thetas,
                              any.prior=FALSE,
                              prior.type=rep('none', length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
@@ -214,6 +234,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
+                             nfixed.thetas=nfixed.thetas,
                              any.prior=FALSE,
                              prior.type=rep('none', length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
@@ -229,12 +250,13 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             next
         }
 
-        if(any(itemtype[i] == c('2PL', '3PL', '3PLu', '4PL'))){
+        if(any(itemtype[i] == c('2PL', '3PL', '3PLu', '4PL'))){            
             pars[[i]] <- new('dich',
                              par=startvalues[[i]],
                              est=freepars[[i]],
                              nfact=nfact,
                              nfixedeffects=nfixedeffects,
+                             nfixed.thetas=nfixed.thetas,
                              dat=fulldata[ ,tmp],
                              ncat=2L,
                              any.prior=FALSE,
@@ -256,6 +278,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              est=freepars[[i]],
                              nfact=nfact,
                              nfixedeffects=nfixedeffects,
+                             nfixed.thetas=nfixed.thetas,
                              dat=fulldata[ ,tmp],
                              ncat=K[i],
                              correctcat=key[i],
@@ -278,6 +301,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
+                             nfixed.thetas=nfixed.thetas,
                              any.prior=FALSE,
                              prior.type=rep('none', length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
@@ -299,6 +323,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
+                             nfixed.thetas=nfixed.thetas,
                              any.prior=FALSE,
                              prior.type=rep('none', length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
@@ -320,6 +345,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
+                             nfixed.thetas=nfixed.thetas,
                              any.prior=FALSE,
                              prior.type=rep('none', length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
@@ -342,6 +368,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
+                             nfixed.thetas=nfixed.thetas,
                              any.prior=FALSE,
                              prior.type=rep('none', length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
@@ -365,6 +392,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
+                             nfixed.thetas=nfixed.thetas,
                              any.prior=FALSE,
                              prior.type=rep('none', length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
@@ -379,13 +407,14 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             next
         }
 
-        if(any(itemtype[i] == c('PC2PL','PC3PL'))){
+        if(any(itemtype[i] == c('PC2PL','PC3PL'))){            
             pars[[i]] <- new('partcomp',
                              par=startvalues[[i]],
                              est=freepars[[i]],
                              nfact=nfact,
                              ncat=2L,
                              nfixedeffects=nfixedeffects,
+                             nfixed.thetas=nfixed.thetas,
                              any.prior=FALSE,
                              prior.type=rep('none', length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
@@ -404,7 +433,8 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             pars[[i]] <- customItems[[itemtype[i] == names(customItems)]]
             pars[[i]]@nfact <- nfact
             pars[[i]]@ncat <- K[i]
-            pars[[i]]@nfixedeffects <- nfixedeffects            
+            pars[[i]]@nfixedeffects <- nfixedeffects
+            pars[[i]]@nfixed.thetas <- nfixed.thetas
             pars[[i]]@dat <- fulldata[ ,tmp]
             pars[[i]]@any.prior <- FALSE
             pars[[i]]@prior.type <- rep('none', length(pars[[i]]@par))

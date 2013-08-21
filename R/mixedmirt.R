@@ -130,17 +130,18 @@
 #' covdata$group <- factor(rep(paste0('G',1:50), each = N/50))
 #' 
 #' #random groups
-#' rmod1 <- mixedmirt(data, covdata, 1, fixed = ~ 0 + items, random = ~ 1|group)
+#' model <- mirt.model(paste0('G = 1-', ncol(data)), quiet = TRUE)
+#' rmod1 <- mixedmirt(data, covdata, model, fixed = ~ 0 + items, random = ~ 1|group)
 #' summary(rmod1)
 #' coef(rmod1)
 #' 
 #' #random groups and random items 
-#' rmod2 <- mixedmirt(data, covdata, 1, random = list(~ 1|group, ~ 1|items))
+#' rmod2 <- mixedmirt(data, covdata, model, random = list(~ 1|group, ~ 1|items))
 #' summary(rmod2)
 #' eff <- randef(rmod2) #estimate random effects
 #' 
 #' #random slopes with fixed intercepts (suppressed correlation)
-#' rmod3 <- mixedmirt(data, covdata, 1, fixed = ~ 0 + items, random = ~ -1 + pseudoIQ|group)
+#' rmod3 <- mixedmirt(data, covdata, model, fixed = ~ 0 + items, random = ~ -1 + pseudoIQ|group)
 #' summary(rmod3)
 #' (eff <- randef(rmod3)) 
 #' 
@@ -190,19 +191,20 @@
 #' 
 #' #make an arbitrary group difference
 #' covdat <- data.frame(group = rep(c('m', 'f'), nrow(Science)/2))
+#' model <- mirt.model(paste0('G = 1-', ncol(Science)), quiet = TRUE)
 #' 
 #' #partial credit model
-#' mod <- mixedmirt(Science, covdat, model=1, fixed = ~ 0 + group)
+#' mod <- mixedmirt(Science, covdat, model=model, fixed = ~ 0 + group)
 #' coef(mod)
 #' 
 #' #gpcm to estimate slopes 
-#' mod2 <- mixedmirt(Science, covdat, model=1, fixed = ~ 0 + group,
+#' mod2 <- mixedmirt(Science, covdat, model=model, fixed = ~ 0 + group,
 #'                  itemtype = 'gpcm')
 #' summary(mod2)
 #' anova(mod, mod2)
 #'
 #' #graded model
-#' mod3 <- mixedmirt(Science, covdat, model=1, fixed = ~ 0 + group,
+#' mod3 <- mixedmirt(Science, covdat, model=model, fixed = ~ 0 + group,
 #'                  itemtype = 'graded')
 #' coef(mod3)
 #' 
@@ -214,11 +216,16 @@ mixedmirt <- function(data, covdata = NULL, model, fixed = ~ 1, random = NULL, i
     Call <- match.call()       
     svinput <- pars
     if(length(itemtype) == 1L) itemtype <- rep(itemtype, ncol(data))    
+    if(!is(model, 'mirt.model')) stop('model input must be created with mirt.model()')
+    tmp <- matrix(model$x,ncol=2L)
+    factorNames <- setdiff(tmp[,1L],'COV')
     if(any(itemtype %in% c('PC2PL', 'PC3PL', '2PLNRM', '3PLNRM', '3PLuNRM', '4PLNRM')))
         stop('itemtype contains unsupported classes of items')    
     if(is(random, 'formula')) {
         random <- list(random)
     } else if(is.null(random)) random <- list()
+    if(is(fixed, 'formula')) fixed <- list(fixed)    
+    if(!is.list(fixed)) stop('fixed input is not a formula or list of formulas')
     RETVALUES <- ifelse(is.character(pars), TRUE, FALSE) 
     if(!is.list(random)) stop('Incorrect input for random argument')
     if(is.null(covdata)) covdata <- data.frame(UsElEsSvAR = factor(rep(1L, nrow(data))))
@@ -232,15 +239,29 @@ mixedmirt <- function(data, covdata = NULL, model, fixed = ~ 1, random = NULL, i
         data <- data[-dropcases, ]
         covdata <- covdata[-dropcases, ]
     }
-    longdata <- reshape(data.frame(ID=1L:nrow(data), data, covdata), idvar='ID', 
-                        varying=list(1L:ncol(data) + 1L), direction='long')
-    colnames(longdata) <- c('ID', colnames(covdata), 'items', 'response')
+    factordata <- matrix(0, nrow(data), length(factorNames), 
+                         dimnames=list(NULL, factorNames))
+    longdata <- reshape(data.frame(ID=1L:nrow(data), data, covdata, factordata), 
+                        idvar='ID', varying=list(1L:ncol(data) + 1L), direction='long')
+    colnames(longdata) <- c('ID', colnames(covdata), factorNames, 'items', 'response')
     for(i in 1L:ncol(itemdesign))
         longdata[, colnames(itemdesign)[i]] <- rep(itemdesign[ ,i], each=nrow(data))
-    mf <- model.frame(fixed, longdata)
-    mm <- model.matrix(fixed, mf)   
+    tmp <- vector('character', length(fixed))
+    for(i in 1L:length(fixed))
+        tmp[i] <- ifelse(length(fixed[[i]]) == 2, 
+                         '(intercept)', as.character(fixed[[i]][2L]))
+    names(fixed) <- tmp
+    if(length(random) > 0L){
+        tmp <- vector('character', length(random))
+        for(i in 1L:length(random))
+            tmp[i] <- ifelse(length(random[[i]]) == 2, 
+                             '(intercept)', as.character(random[[i]][2L]))
+        names(random) <- tmp
+    }
+    mf <- model.frame(fixed$'(intercept)', longdata)
+    mm <- model.matrix(fixed$'(intercept)', mf)
     K <- sapply(as.data.frame(data), function(x) length(na.omit(unique(x))))
-    if(any(K > 2)){
+    if(any(K > 2L)){
         if(any(colnames(mm) %in% paste0('items', 1:ncol(data))))
             stop('fixed formulas do no support the \'items\' internal variable for 
                  polytomous items. Please remove')
@@ -251,10 +272,23 @@ mixedmirt <- function(data, covdata = NULL, model, fixed = ~ 1, random = NULL, i
     mmitems <- mm[, itemindex]
     mm <- mm[ ,!itemindex, drop = FALSE]
     if(length(random) > 0L){
-        mr <- make.randomdesign(random=random, longdata=longdata, covnames=colnames(covdata), 
+        tmp <- make.randomdesign(random=random, longdata=longdata, covnames=colnames(covdata), 
                                 itemdesign=itemdesign, N=nrow(covdata))
-    } else mr <- list()       
-    mixed.design <- list(fixed=mm, random=mr)    
+        mr <- tmp$intercept
+        mr.thetas <- tmp$thetas
+    } else mr <- mr.thetas <- list()
+    if(length(fixed) > 1L){
+        mm <- mm[,!(colnames(mm) %in% '(Intercept)'), drop=FALSE]
+        fixed$'(intercept)' <- NULL
+        fixed.thetas <- vector('list', length(fixed))
+        for(i in 1L:length(fixed)){
+            tmpmf <- model.frame(fixed[[i]], longdata[1L:nrow(data), , drop = FALSE])
+            fixed.thetas[[i]] <- model.matrix(fixed[[i]], tmpmf)[, -1L, drop=FALSE] #is the correct?
+        }
+        names(fixed.thetas) <- names(fixed)
+    } else fixed.thetas <- list()
+    mixed.design <- list(fixed=mm, fixed.thetas=fixed.thetas, 
+                         random=mr, random.thetas=mr.thetas)    
     if(is.null(constrain)) constrain <- list()      
     sv <- ESTIMATION(data=data, model=model, group=rep('all', nrow(data)), itemtype=itemtype,
                      D=1, mixed.design=mixed.design, method='MIXED', constrain=NULL, pars='values')
@@ -264,7 +298,17 @@ mixedmirt <- function(data, covdata = NULL, model, fixed = ~ 1, random = NULL, i
         for(i in 1L:ncol(mm)){
             mmparnum <- sv$parnum[sv$name == mmnames[i]]            
             constrain[[length(constrain) + 1L]] <- mmparnum
-        }            
+        }
+    }
+    if(length(fixed.thetas) > 0L){
+        tmpnames <- names(fixed.thetas)
+        for(i in 1L:length(fixed.thetas)){
+            tmpnames2 <- paste(tmpnames[i], colnames(fixed.thetas[[i]]), sep='_')
+            for(j in 1L:length(tmpnames2)){
+                mmparnum <- sv$parnum[sv$name == tmpnames2[j]]            
+                constrain[[length(constrain) + 1L]] <- mmparnum                
+            }
+        }
     }
     if(ncol(mmitems) > 0L){                
         itemindex <- colnames(data)[which(paste0('items', 1L:ncol(data)) %in% colnames(mmitems))]        

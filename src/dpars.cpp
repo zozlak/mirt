@@ -28,7 +28,7 @@ RcppExport SEXP dparsNominal(SEXP Ra, SEXP Rak, SEXP Rd, SEXP RTheta,
         SEXP RP, SEXP Rnum, SEXP Rdat, SEXP Rnfact, SEXP Rncat,
         SEXP Rakind, SEXP Rdind, SEXP Rak2, SEXP RP2, SEXP RP3,
         SEXP RaTheta, SEXP RaTheta2, SEXP Rdat_num, SEXP Rnumsum, SEXP RnumakD, 
-        SEXP Rnumak2D2, SEXP RnumakDTheta_numsum, SEXP RestHess) 
+        SEXP Rnumak2D2, SEXP RnumakDTheta_numsum, SEXP RestHess, SEXP Rfixed_thetas) 
 {		
     BEGIN_RCPP
     IntegerVector Pnfact(Rnfact), Pncat(Rncat), Pakind(Rakind), Pdind(Rdind), 
@@ -40,13 +40,20 @@ RcppExport SEXP dparsNominal(SEXP Ra, SEXP Rak, SEXP Rd, SEXP RTheta,
     int i, j, k, n;
     NumericVector a(Ra), ak(Rak), d(Rd), ak2(Rak2),
                   numsum(Rnumsum), numakD(RnumakD), numak2D2(Rnumak2D2), 
-                  aTheta(RaTheta), aTheta2(RaTheta2), dL(nfact + ncat*2);
+                  aTheta(RaTheta), aTheta2(RaTheta2);
     NumericVector unitNvec(aTheta.length()); 
     unitNvec.fill(1.0);    
+    NumericMatrix fixed_thetas(Rfixed_thetas);
+    int nfixed_thetas = 0;
+    if(fixed_thetas.nrow() > 1) nfixed_thetas = fixed_thetas.ncol();
     NumericMatrix Theta(RTheta), P(RP), num(Rnum), P2(RP2), P3(RP3),
                   dat_num(Rdat_num), numakDTheta_numsum(RnumakDTheta_numsum), 
-                  d2L(nfact + ncat*2, nfact + ncat*2), dat(Rdat);
+                  d2L(nfact + ncat*2 + nfixed_thetas, nfact + ncat*2 + nfixed_thetas), 
+                  dat(Rdat);
+    NumericVector dL(nfact + ncat*2 + nfixed_thetas);
     const int N = dat.nrow();
+    int USEFIXEDTHETAS = 0;
+    if(fixed_thetas.nrow() > 1) USEFIXEDTHETAS = 1;
     NumericVector tmpvec(N), tmpvec2(N), offterm(N), offterm2(N);
     
     //grad
@@ -202,21 +209,28 @@ RcppExport SEXP dparsNominal(SEXP Ra, SEXP Rak, SEXP Rd, SEXP RTheta,
 }
 
 
-RcppExport SEXP dparsPoly(SEXP Rprob, SEXP RThetas, SEXP Rdat, SEXP Rnzeta, SEXP RestHess) 
+RcppExport SEXP dparsPoly(SEXP Rprob, SEXP RThetas, SEXP Rdat, SEXP Rnzeta, SEXP RestHess,
+    SEXP Rfixed_thetas) 
 {		
     BEGIN_RCPP    
 
 	int i, j, k; 
 	NumericMatrix prob(Rprob);
 	NumericMatrix Thetas(RThetas);    
-    NumericMatrix dat(Rdat);
+    NumericMatrix dat(Rdat), fixed_thetas(Rfixed_thetas);
+    int USEFIXEDTHETAS = 0;
+    int nfixed_thetas = 0;
+    if(fixed_thetas.nrow() > 1){
+        nfixed_thetas = fixed_thetas.ncol();
+        USEFIXEDTHETAS = 1;
+    }
     IntegerVector Pnzeta(Rnzeta);
     IntegerVector estHess(RestHess);        
     const int nzeta = Pnzeta(0);
     const int nfact = Thetas.ncol();
     const int N = Thetas.nrow();
-    NumericMatrix d2L(nfact + nzeta, nfact + nzeta);
-    NumericVector dL(nfact + nzeta);
+    NumericMatrix d2L(nfact + nzeta + nfixed_thetas, nfact + nzeta + nfixed_thetas);
+    NumericVector dL(nfact + nzeta + nfixed_thetas);
 
 	NumericVector Pk(N), Pk_1(N), Pk_p1(N), PQ_1(N), PQ(N), PQ_p1(N), 
 			Pk_1Pk(N), Pk_Pkp1(N), dif1(N), dif1sq(N), dif2(N), 
@@ -349,7 +363,7 @@ RcppExport SEXP dparsPoly(SEXP Rprob, SEXP RThetas, SEXP Rdat, SEXP Rnzeta, SEXP
 	END_RCPP
 }
 
-RcppExport SEXP dparsDich(SEXP Rx, SEXP RTheta, SEXP RestHess, SEXP REM, SEXP Rot) 
+RcppExport SEXP dparsDich(SEXP Rx, SEXP RTheta, SEXP RestHess, SEXP REM, SEXP Rot, SEXP Rfixed_thetas) 
 {		
     BEGIN_RCPP
     
@@ -357,21 +371,36 @@ RcppExport SEXP dparsDich(SEXP Rx, SEXP RTheta, SEXP RestHess, SEXP REM, SEXP Ro
     NumericVector P, Pstar, Q, Qstar, r1, r2;	
 	
 	S4 x(Rx);
-	NumericMatrix Theta(RTheta);        
+	NumericMatrix Theta2(RTheta);        
 	IntegerVector estHess(RestHess);                
 	IntegerVector EM(REM);	
 	NumericVector ot(Rot);
+    NumericMatrix fixed_thetas(Rfixed_thetas);
+    int nfixed = 0;
+    if(fixed_thetas.nrow() > 1) nfixed = fixed_thetas.ncol();
 	
-	NumericVector par = x.slot("par");		
-	const int nfact = Theta.ncol();    
-	NumericVector a(nfact);
-	for(i = 0; i < nfact; i++)
-		a(i) = par(i);
-	const double d = par(nfact);
-    const double g = par(nfact+1);
-    const double u = par(nfact+2);    
+	NumericVector par = x.slot("par");			
+    const int nfact = Theta2.ncol() + nfixed;
+    NumericMatrix Theta(Theta2.nrow(), nfact);
+    if(nfixed){
+        for(i = 0; i < nfixed; i++)
+            Theta(_,i) = fixed_thetas(_,i);
+    }
+    for(i = nfixed; i < nfact; i++)
+        Theta(_,i) = Theta2(_,i-nfixed);
+    
+	NumericVector a2(Theta2.ncol()), a(nfact);
+	for(i = 0; i < Theta2.ncol(); i++)
+		a2(i) = par(i);
+    for(i = 0; i < nfact; i++){
+        if(i < nfixed) a(i) = 1.0;
+    	else a(i) = par(i-nfixed);
+    }
+	const double d = par(nfact-nfixed);
+    const double g = par(nfact-nfixed+1);
+    const double u = par(nfact-nfixed+2);    
     const double g0 = 0.0;
-    const double u1 = 1.0;     	 
+    const double u1 = 1.0;
 	if(EM(0)){
 		NumericMatrix dat = x.slot("rs");
 		r1 = dat(_,1);
@@ -382,12 +411,12 @@ RcppExport SEXP dparsDich(SEXP Rx, SEXP RTheta, SEXP RestHess, SEXP REM, SEXP Ro
 		r2 = dat(_,0);	
 	}	
 	
-    NumericMatrix hess (nfact + 3, nfact + 3);
-    NumericVector grad (nfact + 3);
-    NumericVector r1_P, r1_P2, r2_Q2, r2_Q;    
+    NumericMatrix hess(par.length(), par.length());
+    NumericVector grad(par.length());
+    NumericVector r1_P, r1_P2, r2_Q2, r2_Q;
     
-    P = itemTrace(a, &d, Theta, &g, &u, ot);
-    Pstar = itemTrace(a, &d, Theta, &g0, &u1, ot);
+    P = itemTrace(a2, &d, Theta2, &g, &u, ot);
+    Pstar = itemTrace(a2, &d, Theta2, &g0, &u1, ot);
     Q = 1.0 - P;
     Qstar = 1.0 - Pstar;        
     r1_P = r1/P;

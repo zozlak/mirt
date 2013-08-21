@@ -212,13 +212,12 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	for(i in 1L:nitems){
 	    if(itemtype[i] == 'nestlogit'){
 	        par <- na.omit(c(a[i, ],d[i,1], guess[i], upper[i], nominal[i,-1L],d[i,-1L]))
-	        obj <- new(itemtype[i], par=par, nfact=nfact, correctcat=1L)
+	        obj <- new(itemtype[i], par=par, nfact=nfact, correctcat=1L, nfixed.thetas=0L)
 	    } else {
             par <- na.omit(c(a[i, ],nominal[i,],d[i,],guess[i],upper[i]))
-            obj <- new(itemtype[i], par=par, nfact=nfact)
+            obj <- new(itemtype[i], par=par, nfact=nfact, nfixed.thetas=0L)
 	    }
-        if(any(itemtype[i] == c('gpcm','nominal', 'nestlogit')))
-            obj@ncat <- K[i]
+        obj@ncat <- K[i]
         P <- ProbTrace(obj, Theta)
         data[,i] <- apply(P, 1, fn, ns = ncol(P))
         if(any(itemtype[i] == c('dich', 'gpcm', 'partcomp'))) data[ ,i] <- data[ ,i] - 1L

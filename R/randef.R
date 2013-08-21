@@ -27,6 +27,7 @@ randef <- function(x, ndraws = 1000, thin = 10){
         for(i in 1L:length(Random))
             Random[[i]] <- matrix(0, nrow(x@random[[i]]@drawvals), ncol(x@random[[i]]@drawvals))
     }
+    # random.thetas TODO
     J <- ncol(x@data)
     N <- nrow(x@fulldata)
     Theta <- tmpTheta <- matrix(0, N, x@nfact)        
