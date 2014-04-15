@@ -31,5 +31,7 @@ test_that('large1dim', {
   filter = params$name == 'a1'
   comp = cor(params[filter, 3], params[filter, 5])
   expect_equal(comp, 1, tolerance = 0.2)
+  
+  mirtScores = fscores(model, full.scores=T, method='EAP')
 })
 
