@@ -5,19 +5,9 @@ test_that('large1dim', {
   mirtCluster(3)
   
   data <- dataComplete[, grep('^i[0-9]', names(dataComplete))]
-
-  # no error
   itemTypes = ifelse(
     sapply(data, max) > 1,
-    'gpcm', 
-    '2PL'
-  )
-  model = mirt(data, 1, itemtype=itemTypes, se=T)
-    
-  # error
-  itemTypes = ifelse(
-    sapply(data, max) > 1,
-    'grsm', 
+    'graded', 
     '2PL'
   )
   model = mirt(data, 1, itemtype=itemTypes, se=T)
@@ -28,10 +18,16 @@ test_that('large1dim', {
   mirtParams$name = as.character(mirtParams$name)
   mirtParams$name = sub('^d$', 'd1', mirtParams$name)
   params = join(mplusParams, mirtParams, by=c('item', 'name'), type='left', match='first')
-  filter = params$name == 'a1'
-  comp = cor(params[filter, 3], params[filter, 5])
-  expect_equal(comp, 1, tolerance = 0.2)
-  
+  for(n in c('^a1$', '^d')){
+    filter = grepl(n, params$name)
+    comp = abs(cor(params[filter, 3], params[filter, 5]))
+    plot(params[filter, 3], params[filter, 5], main=paste0(n, ': cor(', round(comp, 3), ')'))
+    expect_equal(comp, 1, tolerance = 0.05)
+  }
+
   mirtScores = fscores(model, full.scores=T, method='EAP')
+  comp = cor(mirtScores[, 1], dataComplete$theta)
+  expect_equal(comp, 1, tolerance = 0.01)  
+  plot(mirtScores[, 1], dataComplete$theta)
 })
 
