@@ -5,7 +5,8 @@ Type: Package
 Title: Multidimensional Item Response Theory
 Authors@R: c( person("Phil", family="Chalmers", email =
     "rphilip.chalmers@gmail.com", role = c("aut", "cre", "cph")),
-    person("Joshua", family="Pritikin", role=c('ctb')))
+    person("Joshua", family="Pritikin", role=c('ctb')),
+    person("Mateusz", family="Zoltak", role=c('ctb')))
 Description: Analysis of dichotomous and polytomous response data using
     unidimensional and multidimensional latent trait models under the Item
     Response Theory paradigm. Exploratory and confirmatory models can be
@@ -38,6 +39,7 @@ LazyData: yes
 LinkingTo: Rcpp
 Author: Phil Chalmers [aut, cre, cph],
     Joshua Pritikin [ctb]
+    Mateusz Zoltak [ctb]
 License: GPL (>= 3)
 Repository: CRAN
 Maintainer: Phil Chalmers <rphilip.chalmers@gmail.com>

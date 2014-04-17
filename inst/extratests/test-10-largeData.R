@@ -1,3 +1,8 @@
+#
+# "largeData" context is a set of tests checking consistency of item parameters
+# and factor scores estimetes obtained in mirt and the other software 
+# (currently Mplus only) using big real-world datasets
+#
 context('largeData')
 
 test_that('large1dim', {
